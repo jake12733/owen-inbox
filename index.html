@@ -266,7 +266,7 @@ a{color:inherit;text-decoration:none}
 
 <div class="app" id="app">
   <aside class="side" id="side">
-    <div class="brand"><div class="mk">OW</div><div><b>OW INBOX</b><small>당근 · 스레드 · 아임웹 · 크몽 · 숨고 · 위시켓</small></div></div>
+    <div class="brand"><div class="mk">OW</div><div><b>OW INBOX</b><small>당근 · 스레드 · 아임웹 · 크몽 · 숨고 · 위시켓 · Gmail · 문자</small></div></div>
     <div class="sync" id="sync"></div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
@@ -340,6 +340,8 @@ const PF = {
   imweb:  {n:'아임웹', c:'#7b61ff', fg:'#fff', s:'im', inbox:'https://ebo.imweb.me/inquiry', desc:'전문가 문의'},
   kmong:  {n:'크몽', c:'#FFD400', fg:'#111', s:'K', inbox:'https://kmong.com/inboxes', desc:'메시지함'},
   soomgo: {n:'숨고', c:'#00C7AE', fg:'#fff', s:'숨', inbox:'https://soomgo.com/requests/received', desc:'받은 요청 · 채팅'},
+  gmail:  {n:'Gmail', c:'#EA4335', fg:'#fff', s:'M', inbox:'https://mail.google.com/mail/u/0/#inbox', desc:'받은편지함 (기본 탭) · 1분마다 자동 전달'},
+  sms:    {n:'문자', c:'#34C759', fg:'#fff', s:'✉', inbox:'sms:', desc:'스마트폰 문자 · 받는 즉시 전달'},
   web:    {n:'홈페이지 문의', c:'#d4af37', fg:'#111', s:'문', inbox:'https://jake12733.github.io/nosite-clinic/', desc:'병원 문의 페이지 · 데모 사이트 문의 버튼'},
   wishket:{n:'위시켓', c:'#2f6bff', fg:'#fff', s:'W', inbox:'https://www.wishket.com/mywishket/', desc:'프로젝트 · 메시지'}
 };
@@ -907,15 +909,27 @@ window.__owLastRaw=localStorage.getItem(KEY);
 
 /* ===== 홈페이지 문의 (NO-SITE CLINIC 문의 페이지 · 데모 사이트 버튼) 실시간 수집 ===== */
 const NS_FN='https://crrsswrrdpzmdlrgkfoi.supabase.co/functions/v1/nosite-inbox';
+const HOOK_LAST='owInbox.hookLast';
 async function pollWeb(){
   const k=localStorage.getItem('nosite-admin-key');if(!k)return;
   try{
-    const r=await fetch(NS_FN,{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':k},body:JSON.stringify({action:'list'})});
+    const since=+localStorage.getItem(HOOK_LAST)||0;
+    const r=await fetch(NS_FN,{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':k},body:JSON.stringify(since?{action:'list',since}:{action:'list'})});
     if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();DB=load();
-    const rows=(d.rows||[]).map(q=>({id:'q'+q.id,name:(q.hname||'이름 없는 병원')+(q.sender?' · '+q.sender:''),preview:(q.source?'['+q.source+'] ':'')+(q.message||'')+(q.contact?'\n연락처: '+q.contact:''),time:q.created_at,unread:!DB.items['web:q'+q.id],url:q.page&&/ask\.html/.test(q.page)?'https://jake12733.github.io/nosite-clinic/':(q.page||PF.web.inbox)}));
-    const hasNew=rows.some(m=>!DB.items['web:'+m.id]);
-    if(hasNew||!DB.meta.web)window.OwenInbox.ingest('web',rows,{ok:true});
+    const d=await r.json();const rows=d.rows||[];DB=load();
+    const groups={web:[],gmail:[],sms:[]};
+    rows.forEach(q=>{const ch=groups[q.channel]?q.channel:'web';const id='q'+q.id;if(DB.items[ch+':'+id])return;
+      let m;
+      if(ch==='gmail')m={id,name:q.hname||q.sender||'(보낸 사람 없음)',preview:q.message||'',time:q.created_at,unread:true,url:q.page||PF.gmail.inbox};
+      else if(ch==='sms'){const num=(q.sender||'').replace(/[^0-9+]/g,'');m={id,name:q.hname||q.sender||'(번호 없음)',preview:q.message||'',time:q.created_at,unread:true,url:num?'sms:'+num:'sms:'}}
+      else m={id,name:(q.hname||'이름 없는 병원')+(q.sender?' · '+q.sender:''),preview:(q.source?'['+q.source+'] ':'')+(q.message||'')+(q.contact?'\n연락처: '+q.contact:''),time:q.created_at,unread:true,url:q.page&&/ask\.html/.test(q.page)?'https://jake12733.github.io/nosite-clinic/':(q.page||PF.web.inbox)};
+      groups[ch].push(m)});
+    let any=false;
+    for(const [pf,list] of Object.entries(groups)){if(list.length){window.OwenInbox.ingest(pf,list,{ok:true});any=true}}
+    if(rows.length)localStorage.setItem(HOOK_LAST,String(Math.max(since,...rows.map(q=>q.id))));
+    if(rows.length||!DB.meta.gmail||!DB.meta.sms){DB=load();const now=new Date().toISOString();
+    ['web','gmail','sms'].forEach(pf=>{DB.meta[pf]=Object.assign(DB.meta[pf]||{},{lastSync:now,ok:true,error:'',count:all().filter(i=>i.pf===pf).length})});
+    save();renderNav();}
   }catch(e){}
 }
 pollWeb();setInterval(pollWeb,10000);
