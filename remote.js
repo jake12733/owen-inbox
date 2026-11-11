@@ -33,6 +33,16 @@ const css = `
 .rp-guide ol li{margin-bottom:6px}
 .rp-guide ol b{color:#e8eaf0}
 .rp-guide .go{width:100%;height:44px;border-radius:12px;border:0;background:#d4b06a;color:#111;font:800 14px inherit;cursor:pointer;margin:12px 0 8px}
+.ad-box{background:#0f1115;border:1px solid #2b3040;border-radius:14px;padding:12px;margin-bottom:12px}
+.ad-id span{display:block;font-size:11px;color:#a4aabb;margin-bottom:4px}
+.ad-id input{width:100%;height:38px;border-radius:9px;border:1px solid #323848;background:#151820;color:#e8eaf0;font:700 16px ui-monospace,monospace;letter-spacing:.06em;padding:0 10px;outline:none}
+.ad-id input:focus{border-color:#ef443b}
+#adGo{background:#ef443b;color:#fff;margin:10px 0 6px}
+.ad-note{font-size:11.5px;color:#a4aabb}
+.ad-help{margin-top:8px;font-size:12px;color:#a4aabb}
+.ad-help summary{cursor:pointer;color:#e8eaf0;font-weight:700;padding:4px 0}
+.ad-help ol{margin:6px 0}
+.rp-guide .go.sec{background:#232836;color:#e8eaf0;border:1px solid #323848;height:38px;font-size:13px;margin:8px 0 0}
 .rp-guide .msg{font-size:12px;color:#ffb547;white-space:pre-wrap}
 .rp-guide .msg.err{color:#ff8a8a}
 .rp-nav{display:flex;justify-content:space-around;width:100%;padding:10px 6px 2px}
@@ -69,14 +79,22 @@ root.innerHTML = `
     <div class="rp-screen" id="rpScreen">
       <canvas id="rpCv" tabindex="0"></canvas>
       <div class="rp-guide" id="rpGuide">
-        <h4>내 폰을 연결해요</h4>
+        <h4>내 폰 (무선 · AnyDesk)</h4>
+        <div class="ad-box">
+          <div class="ad-id"><span>내 폰 AnyDesk 주소</span><input id="adId" inputmode="numeric" autocomplete="off"></div>
+          <button class="go" id="adGo">내 폰 열기</button>
+          <p class="ad-note">누르면 PC의 AnyDesk가 내 폰에 바로 연결돼요. 같은 와이파이가 아니어도 돼요.</p>
+          <details class="ad-help"><summary>매번 폰에서 수락 안 누르게 하기 (한 번만)</summary>
+            <ol><li>폰 AnyDesk → 오른쪽 위 <b>⋮</b> → <b>설정</b></li><li><b>보안</b> → <b>무인 액세스</b> 켜기</li><li>비밀번호 정하기 → PC에서 처음 연결할 때 그 비밀번호 입력 + <b>"로그인 정보 저장"</b> 체크</li></ol>
+            <p>이후엔 "내 폰 열기"만 누르면 폰을 안 만져도 연결돼요.</p></details>
+        </div>
+        <details class="ad-help usb"><summary>USB 케이블로 이 창 안에 띄우기</summary>
         <ol>
           <li><b>USB 케이블</b>로 폰을 이 PC에 꽂아요</li>
-          <li>폰 <b>설정 → 휴대전화 정보 → 소프트웨어 정보 → 빌드번호</b>를 7번 눌러 개발자 모드 켜기</li>
           <li><b>설정 → 개발자 옵션 → USB 디버깅</b> 켜기</li>
-          <li>아래 <b>연결하기</b> → 크롬 창에서 폰 선택 → 폰에 뜨는 <b>"USB 디버깅 허용"</b>에서 <b>항상 허용</b> 체크 후 허용</li>
+          <li>아래 <b>USB로 연결</b> → 크롬 창에서 폰 선택 → 폰의 <b>"USB 디버깅 허용"</b>에서 항상 허용</li>
         </ol>
-        <button class="go" id="rpGo">연결하기</button>
+        <button class="go sec" id="rpGo">USB로 연결</button></details>
         <div class="msg" id="rpMsg"></div>
       </div>
     </div>
@@ -99,7 +117,17 @@ fab.onclick = () => { root.classList.toggle('open'); };
 $('rpX').onclick = () => root.classList.remove('open');
 $('rpSize').onclick = () => { si = (si + 1) % sizes.length; localStorage.setItem('owRemote.size', si); applySize(); };
 $('rpGo').onclick = () => connect();
-$('rpConn').onclick = () => S ? disconnect() : (root.classList.add('open'), connect());
+const AD_DEFAULT = '1511393095';
+const adIn = $('adId'); adIn.value = localStorage.getItem('owRemote.anydesk') || AD_DEFAULT;
+adIn.addEventListener('input', () => { adIn.value = adIn.value.replace(/[^0-9@a-zA-Z._-]/g, ''); localStorage.setItem('owRemote.anydesk', adIn.value); });
+function openAnyDesk() {
+  const id = adIn.value.trim(); if (!id) { msg('AnyDesk 주소를 넣어주세요', true); adIn.focus(); return; }
+  msg('PC의 AnyDesk를 여는 중... 브라우저가 "AnyDesk 열기"를 물으면 "항상 허용" 체크 후 열기를 눌러주세요.');
+  location.href = 'anydesk:' + id;
+  setTimeout(() => { if (document.hasFocus()) msg('AnyDesk가 안 열리면 PC에 AnyDesk가 설치돼 있는지 확인해 주세요.\n(anydesk.com에서 받은 프로그램을 한 번 실행해두면 돼요)', false); }, 2500);
+}
+$('adGo').onclick = openAnyDesk;
+$('rpConn').onclick = () => S ? disconnect() : (root.classList.add('open'), openAnyDesk());
 
 // drag window
 (() => { const bar = $('rpBar'); let sx, sy, ox, oy, on = false;
