@@ -235,6 +235,25 @@ a{color:inherit;text-decoration:none}
   .tp span{max-width:220px}
 }
 .mnav{display:none}
+
+/* ===== 새 메시지 팝업 ===== */
+.ntfs{position:fixed;top:16px;right:16px;z-index:200;display:flex;flex-direction:column;gap:10px;width:370px;max-width:calc(100vw - 24px);pointer-events:none}
+.ntf{pointer-events:auto;background:var(--bg2);border:1px solid var(--line2);border-left:4px solid var(--gold);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);padding:13px 14px 12px;animation:ntfIn .35s cubic-bezier(.2,.8,.2,1);font-family:var(--font);color:var(--tx)}
+@keyframes ntfIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+.ntf .nh{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--tx3);font-weight:700}
+.ntf .nh .live{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(255,93,93,.22);animation:nblink 1.2s infinite}
+@keyframes nblink{50%{opacity:.35}}
+.ntf .nh .x3{margin-left:auto;border:0;background:none;color:var(--tx3);cursor:pointer;font-size:15px;line-height:1}
+.ntf .who{display:flex;align-items:center;gap:8px;margin:8px 0 2px}
+.ntf .pfb{font-size:11px;font-weight:800;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.ntf .who b{font-size:15px;word-break:keep-all;line-height:1.3}
+.ntf .msg{font-size:13px;line-height:1.55;color:var(--tx2);background:var(--bg3);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin:8px 0 10px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.ntf .na{display:flex;gap:6px}
+.ntf .na button,.ntf .na a{flex:1;height:35px;border-radius:9px;border:1px solid var(--line2);background:var(--bg3);color:var(--tx);cursor:pointer;font:700 12.5px var(--font);display:flex;align-items:center;justify-content:center;text-decoration:none;white-space:nowrap}
+.ntf .na .go{flex:1.4;background:var(--gold);border-color:var(--gold);color:#111}
+.ntf .na button:hover,.ntf .na a:hover{filter:brightness(1.1)}
+.ntf.more{border-left-color:var(--blue);padding:10px 14px;cursor:pointer;font-size:13px;font-weight:700}
+@media(max-width:640px){.ntfs{top:auto;bottom:12px;right:12px;left:12px;width:auto}}
 </style>
 </head>
 <body>
@@ -310,6 +329,7 @@ a{color:inherit;text-decoration:none}
   <div class="note-box" style="margin-top:18px">모든 메시지는 이 브라우저(localStorage)에만 저장되고 서버로 전송되지 않습니다. 사이트 주소를 아는 사람이 접속해도 비어 있는 화면만 보입니다.</div>
 </div></div>
 
+<div class="ntfs" id="ntfs"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -320,6 +340,7 @@ const PF = {
   imweb:  {n:'아임웹', c:'#7b61ff', fg:'#fff', s:'im', inbox:'https://ebo.imweb.me/inquiry', desc:'전문가 문의'},
   kmong:  {n:'크몽', c:'#FFD400', fg:'#111', s:'K', inbox:'https://kmong.com/inboxes', desc:'메시지함'},
   soomgo: {n:'숨고', c:'#00C7AE', fg:'#fff', s:'숨', inbox:'https://soomgo.com/requests/received', desc:'받은 요청 · 채팅'},
+  web:    {n:'홈페이지 문의', c:'#d4af37', fg:'#111', s:'문', inbox:'https://jake12733.github.io/nosite-clinic/', desc:'병원 문의 페이지 · 데모 사이트 문의 버튼'},
   wishket:{n:'위시켓', c:'#2f6bff', fg:'#fff', s:'W', inbox:'https://www.wishket.com/mywishket/', desc:'프로젝트 · 메시지'}
 };
 const STATUS = [
@@ -829,9 +850,78 @@ async function hash(s){const b=await crypto.subtle.digest('SHA-256',new TextEnco
 
 /* live update when the collector writes from another tab */
 let lastCount=cntUnread();
-addEventListener('storage',e=>{if(e.key!==KEY)return;DB=load();const n=cntUnread();
-  if(n>lastCount){toast(`새 메시지 ${n-lastCount}건`);if('Notification' in window&&Notification.permission==='granted')new Notification('OW INBOX',{body:`새 메시지 ${n-lastCount}건이 도착했어요`})}
-  lastCount=n;render()});
+addEventListener('storage',e=>{if(e.key!==KEY)return;DB=load();lastCount=cntUnread();render();checkNew()});
+
+/* ===== 새 메시지 팝업: 어디서 · 누가 · 무슨 내용 + 바로 이동하기 ===== */
+const POPKEY='owInbox.popSeen';
+const sigOf=it=>it.key+'|'+(it.preview||'');
+let popSeen=null;
+try{const a=JSON.parse(localStorage.getItem(POPKEY));if(Array.isArray(a))popSeen=new Set(a)}catch(e){}
+const firstRun=!popSeen;
+if(!popSeen)popSeen=new Set(all().map(sigOf));
+const savePop=()=>{const a=[...popSeen];localStorage.setItem(POPKEY,JSON.stringify(a.slice(-3000)))};
+function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)();[0,.16].forEach((t,k)=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=k?1175:880;g.gain.setValueAtTime(1e-4,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.18,c.currentTime+t+.02);g.gain.exponentialRampToValueAtTime(1e-4,c.currentTime+t+.25);o.connect(g).connect(c.destination);o.start(c.currentTime+t);o.stop(c.currentTime+t+.3)})}catch(e){}}
+const locked=()=>$('lock')&&$('lock').classList.contains('open');
+function goMsg(key){
+  const it=DB.items[key];if(!it){toast('메시지를 찾을 수 없어요');return}
+  document.querySelectorAll('.ntf[data-k]').forEach(n=>{if(n.dataset.k===key)n.remove()});
+  if(locked()){toast('PIN을 먼저 입력해 주세요');return}
+  if(it.archived){it.archived=false;save()}
+  view.pf='all';view.st='all';view.q='';if($('q'))$('q').value='';
+  $('side')&&$('side').classList.remove('mopen');
+  select(key);
+  setTimeout(()=>{const d=$('detail');d&&d.scrollTo&&d.scrollTo({top:0})},30);
+}
+function popOne(it){
+  const box=$('ntfs'),p=PF[it.pf]||{n:it.pf,c:'#888',fg:'#fff'};
+  const el=document.createElement('div');el.className='ntf';el.dataset.k=it.key;
+  if(locked()){el.innerHTML='<div class="nh"><span class="live"></span>새 메시지가 도착했어요<button class="x3" data-nx>✕</button></div><div class="msg">잠금 상태라 내용은 숨겼어요. PIN을 입력하면 볼 수 있어요.</div>'}
+  else el.innerHTML=`<div class="nh"><span class="live"></span>새 메시지 · ${esc(rel(it.time)||'방금')}<button class="x3" data-nx title="닫기">✕</button></div>
+  <div class="who"><span class="pfb" style="background:${p.c};color:${p.fg}">${esc(p.n)}</span><b>${esc(it.name)}</b></div>
+  <div class="msg">${esc(it.preview||'(내용 미리보기 없음)')}</div>
+  <div class="na"><button class="go" data-ngo>바로 이동하기</button><a href="${esc(it.url||p.inbox||'#')}" target="_blank" rel="noopener" data-nopen>${esc(p.n)}에서 열기</a><button data-nx>닫기</button></div>`;
+  box.prepend(el);
+  while(box.querySelectorAll('.ntf[data-k]').length>4){const l=[...box.querySelectorAll('.ntf[data-k]')].pop();l.remove()}
+  if('Notification' in window&&Notification.permission==='granted'&&document.hidden&&!locked()){
+    try{const n=new Notification(`[${p.n}] ${it.name}`,{body:(it.preview||'').slice(0,140),tag:'ow-'+it.key});n.onclick=()=>{window.focus();goMsg(it.key);n.close()}}catch(e){}
+  }
+}
+function checkNew(silent){
+  const fresh=all().filter(it=>!it.archived&&it.unread&&!popSeen.has(sigOf(it))).sort((a,b)=>new Date(a.time)-new Date(b.time));
+  all().forEach(it=>popSeen.add(sigOf(it)));savePop();
+  if(!fresh.length||silent)return;
+  const show=fresh.slice(-3);show.forEach(popOne);
+  if(fresh.length>3){const m=document.createElement('div');m.className='ntf more';m.textContent=`그 외 새 메시지 ${fresh.length-3}건 더 · 눌러서 안 읽음 보기`;m.onclick=()=>{m.remove();view.pf='unread';render()};$('ntfs').append(m)}
+  beep();
+}
+$('ntfs').addEventListener('click',e=>{const n=e.target.closest('.ntf');if(!n||!n.dataset.k)return;
+  if(e.target.closest('[data-ngo]'))goMsg(n.dataset.k);
+  else if(e.target.closest('[data-nx]'))n.remove();
+  else if(e.target.closest('[data-nopen]'))setTimeout(()=>n.remove(),300)});
+/* 같은 탭에서 수집 루틴이 ingest를 호출해도 팝업 */
+window.OwenInbox.ingest=function(){const r=ingest.apply(null,arguments);lastCount=cntUnread();checkNew();return r};
+/* 창을 다시 볼 때 / 주기적으로 다른 탭 저장분 확인 (storage 이벤트를 놓친 경우 대비) */
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){DB=load();render();checkNew()}});
+setInterval(()=>{const raw=localStorage.getItem(KEY);if(raw!==window.__owLastRaw){window.__owLastRaw=raw;DB=load();const before=popSeen.size;checkNew();if(popSeen.size!==before)render()}},5000);
+window.__owLastRaw=localStorage.getItem(KEY);
+
+/* ===== 홈페이지 문의 (NO-SITE CLINIC 문의 페이지 · 데모 사이트 버튼) 실시간 수집 ===== */
+const NS_FN='https://crrsswrrdpzmdlrgkfoi.supabase.co/functions/v1/nosite-inbox';
+async function pollWeb(){
+  const k=localStorage.getItem('nosite-admin-key');if(!k)return;
+  try{
+    const r=await fetch(NS_FN,{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':k},body:JSON.stringify({action:'list'})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();DB=load();
+    const rows=(d.rows||[]).map(q=>({id:'q'+q.id,name:(q.hname||'이름 없는 병원')+(q.sender?' · '+q.sender:''),preview:(q.source?'['+q.source+'] ':'')+(q.message||'')+(q.contact?'\n연락처: '+q.contact:''),time:q.created_at,unread:!DB.items['web:q'+q.id],url:q.page&&/ask\.html/.test(q.page)?'https://jake12733.github.io/nosite-clinic/':(q.page||PF.web.inbox)}));
+    const hasNew=rows.some(m=>!DB.items['web:'+m.id]);
+    if(hasNew||!DB.meta.web)window.OwenInbox.ingest('web',rows,{ok:true});
+  }catch(e){}
+}
+pollWeb();setInterval(pollWeb,10000);
+
+/* 처음 열었을 때: 창을 닫아둔 동안 온 새 메시지도 팝업 */
+setTimeout(()=>checkNew(firstRun),600);
 setInterval(()=>{renderSync();renderList()},60000);
 if('Notification' in window&&Notification.permission==='default')document.addEventListener('click',()=>Notification.requestPermission(),{once:true});
 
