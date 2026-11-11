@@ -16,7 +16,7 @@ const css = `
 .rp-fab:hover{border-color:#d4b06a}
 .rp-fab i{width:9px;height:9px;border-radius:50%;background:#6d7488}
 .rp-fab.on i{background:#3ecf8e;box-shadow:0 0 0 3px rgba(62,207,142,.25)}
-.rp{position:fixed;right:24px;top:70px;z-index:160;display:none;flex-direction:column;align-items:center;user-select:none;font-family:var(--font,system-ui)}
+.rp{position:fixed;right:72px;top:24px;z-index:160;display:none;flex-direction:column;align-items:center;user-select:none;font-family:var(--font,system-ui)}
 .rp.open{display:flex}
 .rp-bar{display:flex;align-items:center;gap:6px;margin-bottom:8px;background:#151820;border:1px solid #323848;border-radius:12px;padding:6px 8px;cursor:move;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 .rp-bar b{font-size:12.5px;color:#e8eaf0;margin-right:4px}
