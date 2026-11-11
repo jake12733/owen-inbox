@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-cache">
 <title>OW INBOX · 통합 메시지 센터</title>
 <meta name="theme-color" content="#0f1115">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230f1115'/%3E%3Ctext x='32' y='42' font-family='Georgia' font-size='28' font-weight='700' fill='%23d4b06a' text-anchor='middle'%3EOW%3C/text%3E%3C/svg%3E">
@@ -344,7 +345,7 @@ const BIZ=`[사업자 정보] Owen Web(오웬웹) · 병원/소상공인 홈페�
 /* ================= store ================= */
 let DB = load();
 function blank(){return {items:{}, tpl:DEFAULT_TPL.slice(), meta:{}, pin:null, outbox:[], chat:[]}}
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.items){let purged=false;for(const k of Object.keys(d.items)){if(d.items[k].source==='sample'||k.includes(':sample-')){delete d.items[k];purged=true}}if(purged){d.outbox=(d.outbox||[]).filter(o=>d.items[o.key]);localStorage.setItem(KEY,JSON.stringify(d))}return Object.assign(blank(),d)}}catch(e){}return blank()}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.items){let purged=false;for(const k of Object.keys(d.items)){if(d.items[k].source==='sample'||k.includes(':sample-')){delete d.items[k];purged=true}}if(Array.isArray(d.chat)){const n=d.chat.length;d.chat=d.chat.filter(m=>!(m.role==='model'&&/^⚠/.test(m.text||'')));if(d.chat.length!==n)purged=true}if(purged){d.outbox=(d.outbox||[]).filter(o=>d.items[o.key]);localStorage.setItem(KEY,JSON.stringify(d))}return Object.assign(blank(),d)}}catch(e){}return blank()}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
 const uid=()=>Math.random().toString(36).slice(2,10);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -719,7 +720,8 @@ async function askAI(){
       else{const res=applyAction(a);if(res)applied.push(res)}
     });
     DB.chat.push({role:'model',text:r.reply||'(답변 없음)',sends,applied}); DB.chat=DB.chat.slice(-60); save();
-  }catch(e){DB.chat.push({role:'model',text:'⚠ '+e.message});save()}
+  }catch(e){aiBusy=false;render();$('aim').insertAdjacentHTML('beforeend',`<div class="msg a" style="border-color:rgba(255,93,93,.4)">⚠ ${esc(e.message)}<div class="ab" style="margin-top:8px"><button class="btn" id="aiRetry">다시 시도</button></div></div>`);$('aim').scrollTop=1e9;
+    $('aiRetry').onclick=()=>{DB.chat=DB.chat.filter((m,i,a)=>!(i===a.length-1&&m.role==='user'));save();$('aiIn').value=q;askAI()};return}
   aiBusy=false; render();
 }
 
