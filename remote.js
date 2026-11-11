@@ -13,7 +13,11 @@ async function libs() {
 
 const css = `
 .rp-fab{position:fixed;right:18px;bottom:18px;z-index:150;height:46px;padding:0 16px;border-radius:23px;border:1px solid #323848;background:#151820;color:#e8eaf0;font:700 13.5px var(--font,system-ui);display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.45)}
-.rp-fab:hover{border-color:#d4b06a}
+.rp-fab:hover{border-color:#ef443b}
+.rp-gear{margin-left:6px;padding:2px 4px;border-radius:6px;color:#6d7488;font-size:13px}
+.rp-gear:hover{color:#e8eaf0;background:#232836}
+.rp-toast{position:fixed;right:18px;bottom:74px;z-index:151;background:#151820;border:1px solid #323848;color:#e8eaf0;border-radius:10px;padding:9px 13px;font:600 12.5px var(--font,system-ui);box-shadow:0 10px 30px rgba(0,0,0,.45);opacity:0;transition:.25s;pointer-events:none}
+.rp-toast.show{opacity:1}
 .rp-fab i{width:9px;height:9px;border-radius:50%;background:#6d7488}
 .rp-fab.on i{background:#3ecf8e;box-shadow:0 0 0 3px rgba(62,207,142,.25)}
 .rp{position:fixed;right:72px;top:24px;z-index:160;display:none;flex-direction:column;align-items:center;user-select:none;font-family:var(--font,system-ui)}
@@ -71,7 +75,7 @@ const ic = {
   shot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l2-2h4l2 2"/></svg>',
 };
 
-const fab = document.createElement('button'); fab.className = 'rp-fab'; fab.innerHTML = '<i></i>내 폰 원격'; fab.title = 'USB로 연결한 내 폰을 이 화면에서 조작';
+const fab = document.createElement('button'); fab.className = 'rp-fab'; fab.innerHTML = '<i></i>내 폰 열기<span class="rp-gear" title="설정">⚙</span>'; fab.title = '누르면 AnyDesk로 내 폰이 바로 열려요';
 const root = document.createElement('div'); root.className = 'rp';
 root.innerHTML = `
   <div class="rp-bar" id="rpBar"><b>내 폰</b><span class="st" id="rpSt">연결 안 됨</span><button id="rpConn" class="pri">연결</button><button id="rpSize" title="크기">크기</button><button id="rpX" title="닫기">✕</button></div>
@@ -113,15 +117,18 @@ const sizes = [260, 300, 360, 420]; let si = +(localStorage.getItem('owRemote.si
 const applySize = () => { root.style.setProperty('--pw', sizes[si] + 'px'); };
 applySize();
 
-fab.onclick = () => { root.classList.toggle('open'); };
+fab.onclick = (e) => { if (e.target.closest('.rp-gear')) { root.classList.toggle('open'); return; } openAnyDesk(true); };
 $('rpX').onclick = () => root.classList.remove('open');
 $('rpSize').onclick = () => { si = (si + 1) % sizes.length; localStorage.setItem('owRemote.size', si); applySize(); };
 $('rpGo').onclick = () => connect();
 const AD_DEFAULT = '1511393095';
 const adIn = $('adId'); adIn.value = localStorage.getItem('owRemote.anydesk') || AD_DEFAULT;
 adIn.addEventListener('input', () => { adIn.value = adIn.value.replace(/[^0-9@a-zA-Z._-]/g, ''); localStorage.setItem('owRemote.anydesk', adIn.value); });
-function openAnyDesk() {
-  const id = adIn.value.trim(); if (!id) { msg('AnyDesk 주소를 넣어주세요', true); adIn.focus(); return; }
+const rpToast = document.createElement('div'); rpToast.className = 'rp-toast'; document.body.appendChild(rpToast);
+function quickToast(t){ rpToast.textContent = t; rpToast.classList.add('show'); clearTimeout(rpToast._t); rpToast._t = setTimeout(() => rpToast.classList.remove('show'), 2500); }
+function openAnyDesk(quick) {
+  const id = adIn.value.trim(); if (!id) { root.classList.add('open'); msg('AnyDesk 주소를 넣어주세요', true); adIn.focus(); return; }
+  if (quick === true) { quickToast('내 폰 여는 중...'); fab.classList.add('on'); location.href = 'anydesk:' + id; return; }
   msg('PC의 AnyDesk로 내 폰에 연결하는 중... (크롬이 "AnyDesk 열기"를 물으면 "항상 허용" 체크 후 열기)');
   let left = false; const onBlur = () => { left = true; };
   window.addEventListener('blur', onBlur, { once: true });
