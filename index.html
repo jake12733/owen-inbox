@@ -276,7 +276,7 @@ a{color:inherit;text-decoration:none}
 <div class="mb" id="mAdd"><div class="md">
   <h3>메시지 직접 추가 <button data-close>×</button></h3>
   <div class="fl"><label>플랫폼</label><select id="aPf"></select></div>
-  <div class="fl"><label>보낸 사람</label><input id="aNm" placeholder="예) 김사장님 / 누안의원"></div>
+  <div class="fl"><label>보낸 사람</label><input id="aNm" placeholder="보낸 사람 이름"></div>
   <div class="fl"><label>내용</label><textarea id="aTx" placeholder="받은 메시지 내용"></textarea></div>
   <div class="fl"><label>원문 링크 (선택)</label><input id="aUrl" placeholder="https://"></div>
   <div class="mf"><button class="btn" data-close>취소</button><button class="btn pri" id="aSave">추가</button></div>
@@ -303,7 +303,6 @@ a{color:inherit;text-decoration:none}
   <div style="display:flex;gap:6px;flex-wrap:wrap">
     <button class="btn" id="sExport">백업 내보내기 (JSON)</button>
     <label class="btn" style="cursor:pointer">백업 불러오기<input type="file" id="sImport" accept=".json" hidden></label>
-    <button class="btn" id="sSample">샘플 데이터 넣기</button>
     <button class="btn" id="sClear" style="color:var(--red)">전체 삭제</button>
   </div>
   <div class="note-box" style="margin-top:18px">모든 메시지는 이 브라우저(localStorage)에만 저장되고 서버로 전송되지 않습니다. 사이트 주소를 아는 사람이 접속해도 비어 있는 화면만 보입니다.</div>
@@ -549,8 +548,10 @@ function renderList(){
   const L=filtered();
   if(!L.length){
     const none=!all().length;
-    $('items').innerHTML=`<div class="empty"><b>${none?'아직 받은 메시지가 없어요':'조건에 맞는 메시지가 없어요'}</b>${none?'Aside 자동 수집이 돌면 6개 플랫폼 메시지가 여기에 모입니다.<br>지금 화면을 먼저 보고 싶으면 샘플을 넣어 보세요.':''}${none?'<br><button id="eSample">샘플로 미리보기</button>':''}</div>`;
-    const b=$('eSample'); if(b) b.onclick=loadSample; return;
+    const rows=Object.entries(PF).map(([k,p])=>{const m=DB.meta[k];const s=!m?['var(--tx3)','아직 확인 안 함']:m.ok?['var(--green)',`${m.count}건 · ${rel(m.lastSync)} 확인`]:['var(--red)',m.error||'수집 실패'];
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);text-align:left"><span class="tag" style="background:${p.c};color:${p.fg};min-width:46px;justify-content:center">${p.n}</span><i style="width:7px;height:7px;border-radius:50%;background:${s[0]}"></i><span style="color:var(--tx2)">${esc(s[1])}</span>${m&&!m.ok?`<a href="${p.inbox}" target="_blank" rel="noopener" style="margin-left:auto;color:var(--gold);font-size:12.5px">로그인 ↗</a>`:''}</div>`}).join('');
+    $('items').innerHTML=none?`<div class="empty"><b>받은 메시지가 없어요</b>실제로 확인한 결과만 표시합니다.<div style="margin-top:16px;font-size:13px">${rows}</div></div>`:`<div class="empty"><b>조건에 맞는 메시지가 없어요</b></div>`;
+    return;
   }
   $('items').innerHTML=L.map(it=>`<div class="it ${it.unread?'unread':''} ${view.sel===it.key?'on':''}" data-k="${esc(it.key)}">
     ${avatar(it)}
@@ -642,18 +643,17 @@ function renderDetail(){
 /* ===== AI chat view ===== */
 function aiView(){
   const c=aiCfg(), chat=DB.chat||[];
-  const sugg=['오늘 들어온 문의 요약해줘','답장 안 한 문의 우선순위대로 정리해줘','신규 문의 전부에게 첫 응대 메시지 보내줘','계약 가능성 높은 고객 별표 해줘','병원 홈페이지 제안서 문구 써줘'];
+  const sugg=all().length?['오늘 들어온 문의 요약해줘','답장 안 한 문의 우선순위대로 정리해줘','신규 문의 전부에게 첫 응대 메시지 보내줘','계약 가능성 높은 고객 별표 해줘']:['병원 홈페이지 제안서 문구 써줘','크몽 서비스 소개글 써줘','처음 문의에 보낼 답변 템플릿 만들어줘'];
   return `<div class="aiw"><div class="aih"><div class="orb"></div><div><h2>AI 비서</h2><p>받은 메시지를 읽고 요약 · 답장 · 상태 정리 · 메시지 발송까지. 보내는 메시지는 항상 승인 후 발송됩니다.</p></div>
     <div style="margin-left:auto;display:flex;gap:6px"><button class="btn" id="aiClear">대화 지우기</button></div></div>
     <div class="aim" id="aim">${!c.key?`<div class="msg a">AI 키가 아직 없어요. <b>설정 > AI 연결</b>에서 Gemini API 키를 넣으면 바로 쓸 수 있어요.</div>`:''}
-      ${chat.length?chat.map(renderMsg).join(''):`<div class="msg a">안녕하세요! 무엇이든 시켜주세요.
-· "카페온다한테 포트폴리오 링크 보내줘"
-· "숭고 문의 전부 견적 안내로 답장해줘"
-· "그린로지스 견적발송으로 바꾸고 메모에 화요일 미팅 적어줘"
-· "이번 주 문의 몇 건이고 어느 플랫폼이 제일 많아?"</div>`}
+      ${chat.length?chat.map(renderMsg).join(''):`<div class="msg a">${all().length?`받은 메시지 ${all().filter(i=>!i.archived).length}건을 기준으로 도와드릴게요.`:'아직 실제로 받은 메시지가 없어요. 메시지가 들어오면 요약·답장·발송을 도와드리고, 지금은 글쓰기·템플릿 만들기 등을 할 수 있어요.'}
+· "OO님한테 견적 안내 보내줘"
+· "답장 안 한 문의 정리해줘"
+· "OO님 상태 견적발송으로 바꾸고 메모 남겨줘"</div>`}
     </div>
     <div class="sug">${sugg.map(s=>`<button>${esc(s)}</button>`).join('')}</div>
-    <div class="aii"><textarea id="aiIn" rows="1" placeholder="예) 누안의원한테 리뉴얼 가능하다고 답장하고 견적 안내해줘"></textarea><button id="aiGo">보내기</button></div></div>`;
+    <div class="aii"><textarea id="aiIn" rows="1" placeholder="무엇이든 요청하세요. 예) OO님한테 포트폴리오 링크 보내줘"></textarea><button id="aiGo">보내기</button></div></div>`;
 }
 function renderMsg(m,idx){
   if(m.role==='user') return `<div class="msg u">${esc(m.text)}</div>`;
@@ -757,23 +757,10 @@ $('sPinSave').onclick=async()=>{const v=$('sPin').value.trim();if(v&&!/^\d{4,6}$
 $('sExport').onclick=()=>{const b=new Blob([JSON.stringify(load(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='ow-inbox-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
 $('sImport').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.items)throw 0;DB=Object.assign(blank(),d);save();render();toast('불러왔어요')}catch(x){toast('백업 파일이 아니에요')}})};
 $('sClear').onclick=()=>{if(confirm('모든 메시지와 메모를 삭제할까요? (템플릿 · PIN은 유지)')){DB.items={};DB.meta={};save();view.sel=null;render();$('mSet').classList.remove('open')}};
-$('sSample').onclick=()=>{loadSample();$('mSet').classList.remove('open')};
+
 $('mMenu').onclick=()=>$('side').classList.toggle('mopen');
 $('q').oninput=e=>{view.q=e.target.value;renderList()};
 
-function loadSample(){
-  const keepMeta=JSON.stringify(load().meta||{});
-  const S=[['kmong','u1','카페온다','안녕하세요, 카페 홈페이지 제작 견적 문의드립니다. 메뉴판이랑 위치 안내 정도면 될 것 같아요.','12분 전',1],
-    ['soomgo','u2','박OO 고객','[숨고 요청] 웹사이트 제작 · 병원 · 예산 50~100만원 · 2주 이내 희망','35분 전',1],
-    ['imweb','u3','누안의원','아임웹으로 의원 홈페이지 리뉴얼 가능할까요? 기존 사이트가 모바일에서 깨져요.','1시간 전',1],
-    ['wishket','u4','(주)그린로지스','[프로젝트 지원 결과] 물류 회사 소개 페이지 제작 - 미팅 요청이 도착했습니다.','3시간 전',0],
-    ['daangn','u5','옥정동 꽃집','혹시 동네 가게 홈페이지도 만들어 주시나요?','어제',0],
-    ['threads','u6','@dev.minji','포트폴리오 너무 예뻐요! 3D 인체맵 어떻게 만드신 거예요?','2일 전',0]];
-  S.forEach(([pf,id,name,preview,time,unread])=>ingest(pf,[{id:'sample-'+id,name,preview,time,unread:!!unread}],{ok:true}));
-  Object.values(DB.items).forEach(i=>{if(i.key.includes('sample-')){i.source='sample'}if(i.key.includes('sample-u4')){i.status='quote';i.memo='예산 150 · 다음 주 화 미팅'}if(i.key.includes('sample-u5'))i.status='talk'});
-  DB.meta=JSON.parse(keepMeta);
-  save();render();toast('샘플을 넣었어요 (설정 > 전체 삭제로 지울 수 있어요)');
-}
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200)}
 async function hash(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('ow-inbox:'+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 
