@@ -296,7 +296,8 @@ a{color:inherit;text-decoration:none}
   <h3>설정 <button data-close>×</button></h3>
   <div class="fl"><label>PIN 잠금 (숫자 4~6자리, 비우면 해제)</label><input id="sPin" type="password" inputmode="numeric" maxlength="6" placeholder="미설정"></div>
   <div class="mf" style="justify-content:flex-start;margin-top:0;margin-bottom:18px"><button class="btn pri" id="sPinSave">PIN 저장</button></div>
-  <div class="fl"><label>AI 연결 · Google Gemini API 키 (이 브라우저에만 저장)</label><input id="sKey" type="password" placeholder="AIza…" autocomplete="off"></div>
+  <div class="fl"><label>AI 연결</label><div style="font-size:13px;color:var(--tx2);background:var(--bg3);border:1px solid var(--line);border-radius:9px;padding:10px 12px"><span style="color:var(--green)">●</span> 기본: Owen 서버의 Gemini가 연결돼 있어요. 어느 브라우저 · 기기에서 열어도 바로 작동합니다. (키는 서버에만 있고 사이트 코드에는 없어요)</div></div>
+  <div class="fl"><label><input type="checkbox" id="sOwn" style="vertical-align:-2px;margin-right:6px">내 Gemini 키를 직접 사용 (선택)</label><input id="sKey" type="password" placeholder="AIza… 또는 AQ.…" autocomplete="off"></div>
   <div class="fl"><label>모델</label><select id="sModel"><option value="">자동 (추천 · 붐비면 다른 모델로 전환)</option><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (가장 빠름)</option><option value="gemini-3.5-flash">Gemini 3.5 Flash (고품질 · 자주 붐빔)</option></select></div>
   <div class="mf" style="justify-content:flex-start;margin-top:0;margin-bottom:18px"><button class="btn pri" id="sKeySave">AI 설정 저장</button><button class="btn" id="sKeyTest">연결 테스트</button><span id="sKeyMsg" style="font-size:12.5px;color:var(--tx3);align-self:center"></span></div>
   <div class="fl"><label>데이터</label></div>
@@ -400,8 +401,26 @@ window.OwenInbox={ingest, data:()=>load(), platforms:Object.keys(PF), outbox:out
 /* ===== AI (Gemini, 키는 이 브라우저에만 저장) ===== */
 function aiCfg(){try{return JSON.parse(localStorage.getItem(AIKEY))||{}}catch(e){return{}}}
 const MODELS=['gemini-3.5-flash-lite','gemini-3.1-flash-lite','gemini-flash-lite-latest','gemini-3.5-flash','gemini-flash-latest'];
+const AI_PROXY='https://crrsswrrdpzmdlrgkfoi.supabase.co/functions/v1/ow-inbox-ai', AI_PUB='sb_publishable_5hZ36ovxuTQqmOQoPfVVug_Ky2MLPwj';
+function parseAI(t,json){if(!json)return t;try{return JSON.parse(t.replace(/^\s*```(json)?\s*|\s*```\s*$/g,''))}catch(e){const mm=t.match(/\{[\s\S]*\}/);if(mm)return JSON.parse(mm[0]);throw new Error('AI 응답 형식 오류')}}
 async function aiCall(system, contents, json=true){
-  const c=aiCfg(); if(!c.key) throw new Error('Gemini 키가 연결되지 않았어요 (설정 > AI 연결)');
+  const c=aiCfg();
+  if(!(c.key&&c.useOwn)){
+    let last;
+    for(let round=0;round<2;round++){
+      try{
+        const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),90000);
+        const r=await fetch(AI_PROXY,{method:'POST',signal:ctl.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+AI_PUB,'apikey':AI_PUB},body:JSON.stringify({system,contents,json,model:c.manual?c.model:undefined})});
+        clearTimeout(to);
+        const d=await r.json().catch(()=>({}));
+        if(r.ok&&d.text){window.__aiModel=d.model+' (서버)';return parseAI(d.text,json)}
+        last=new Error(r.status===429?(d.error||'요청이 너무 많아요'):(r.status===502?'Gemini 서버가 붐벼요. 잠시 후 다시 시도해 주세요':(d.error||('AI 서버 오류 '+r.status))));
+        if(r.status===429)break;
+      }catch(e){last=e.name==='AbortError'?new Error('AI 응답이 너무 늦어요'):(e.message&&!/형식/.test(e.message)?new Error('AI 서버에 연결하지 못했어요'):e)}
+      await new Promise(r=>setTimeout(r,1500));
+    }
+    throw last;
+  }
   const pick=c.model&&MODELS.includes(c.model)&&c.manual?c.model:null;
   const order=pick?[pick].concat(MODELS.filter(m=>m!==pick)):MODELS.slice();
   let last;
@@ -653,8 +672,8 @@ function aiView(){
   const c=aiCfg(), chat=DB.chat||[];
   const sugg=all().length?['오늘 들어온 문의 요약해줘','답장 안 한 문의 우선순위대로 정리해줘','신규 문의 전부에게 첫 응대 메시지 보내줘','계약 가능성 높은 고객 별표 해줘']:['병원 홈페이지 제안서 문구 써줘','크몽 서비스 소개글 써줘','처음 문의에 보낼 답변 템플릿 만들어줘'];
   return `<div class="aiw"><div class="aih"><div class="orb"></div><div><h2>AI 비서</h2><p>받은 메시지를 읽고 요약 · 답장 · 상태 정리 · 메시지 발송까지. 보내는 메시지는 항상 승인 후 발송됩니다.</p></div>
-    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">${c.key?`<span class="tag" style="background:rgba(62,207,142,.14);color:var(--green);padding:5px 10px">● Gemini 연결됨 · ${c.manual&&c.model?esc(c.model.replace('gemini-','')):'자동'}</span>`:`<button class="btn" id="aiSetKey" style="color:var(--amber)">● Gemini 키 연결하기</button>`}<button class="btn" id="aiClear">대화 지우기</button></div></div>
-    <div class="aim" id="aim">${!c.key?`<div class="msg a">AI 키가 아직 없어요. <b>설정 > AI 연결</b>에서 Gemini API 키를 넣으면 바로 쓸 수 있어요.</div>`:''}
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center"><span class="tag" style="background:rgba(62,207,142,.14);color:var(--green);padding:5px 10px">● Gemini 연결됨 · ${c.key&&c.useOwn?'내 키':'Owen 서버'} · ${c.manual&&c.model?esc(c.model.replace('gemini-','')):'자동'}</span><button class="btn" id="aiClear">대화 지우기</button></div></div>
+    <div class="aim" id="aim">
       ${chat.length?chat.map(renderMsg).join(''):`<div class="msg a">${all().length?`받은 메시지 ${all().filter(i=>!i.archived).length}건을 기준으로 도와드릴게요.`:'아직 실제로 받은 메시지가 없어요. 메시지가 들어오면 요약·답장·발송을 도와드리고, 지금은 글쓰기·템플릿 만들기 등을 할 수 있어요.'}
 · "OO님한테 견적 안내 보내줘"
 · "답장 안 한 문의 정리해줘"
@@ -759,9 +778,9 @@ $('tSave').onclick=()=>{const n=$('tNm').value.trim(),t=$('tTx').value.trim();if
   const id=$('tSave').dataset.id;if(id){Object.assign(DB.tpl.find(x=>x.id===id),{n,t})}else DB.tpl.push({id:'t'+uid(),n,t});
   save();$('tNm').value='';$('tTx').value='';delete $('tSave').dataset.id;renderTpl();renderDetail();toast('저장했어요')};
 $('tReset').onclick=()=>{if(confirm('기본 템플릿으로 되돌릴까요?')){DB.tpl=DEFAULT_TPL.slice();save();renderTpl();renderDetail()}};
-$('btnSet').onclick=()=>{$('sPin').value='';const c=aiCfg();$('sKey').value='';$('sKey').placeholder=c.key?'저장됨 · 바꾸려면 새 키 입력':'AIza…';$('sModel').value=c.manual?(c.model||''):'';$('sKeyMsg').textContent=c.key?'● 연결됨':'';openM('mSet')};
-$('sKeySave').onclick=()=>{const c=aiCfg();const k=$('sKey').value.trim();if(k)c.key=k;c.model=$('sModel').value;c.manual=!!c.model;localStorage.setItem(AIKEY,JSON.stringify(c));$('sKey').value='';$('sKeyMsg').textContent=c.key?'● 저장됨':'키 없음';toast('AI 설정을 저장했어요');renderDetail()};
-$('sKeyTest').onclick=async()=>{$('sKeyMsg').textContent='테스트 중…';try{const t=await aiCall('짧게 답하라.',[{role:'user',parts:[{text:'"연결 성공" 네 글자만 말해'}]}],false);$('sKeyMsg').textContent='✓ '+t.trim().slice(0,20)}catch(e){$('sKeyMsg').textContent='✕ '+e.message.slice(0,60)}};
+$('btnSet').onclick=()=>{$('sPin').value='';const c=aiCfg();$('sKey').value='';$('sKey').placeholder=c.key?'저장됨 · 바꾸려면 새 키 입력':'AIza…';$('sModel').value=c.manual?(c.model||''):'';$('sOwn').checked=!!c.useOwn;$('sKeyMsg').textContent='';openM('mSet')};
+$('sKeySave').onclick=()=>{const c=aiCfg();const k=$('sKey').value.trim();if(k)c.key=k;c.useOwn=$('sOwn').checked&&!!c.key;c.model=$('sModel').value;c.manual=!!c.model;localStorage.setItem(AIKEY,JSON.stringify(c));$('sKey').value='';$('sKeyMsg').textContent=c.useOwn?'● 내 키 사용':'● Owen 서버 사용';toast('AI 설정을 저장했어요');renderDetail()};
+$('sKeyTest').onclick=async()=>{$('sKeyMsg').textContent='테스트 중…';try{const t=await aiCall('짧게 답하라.',[{role:'user',parts:[{text:'"연결 성공" 네 글자만 말해'}]}],false);$('sKeyMsg').textContent='✓ '+t.trim().slice(0,20)+' · '+(window.__aiModel||'')}catch(e){$('sKeyMsg').textContent='✕ '+e.message.slice(0,60)}};
 $('sPinSave').onclick=async()=>{const v=$('sPin').value.trim();if(v&&!/^\d{4,6}$/.test(v)){toast('숫자 4~6자리로 입력하세요');return}DB.pin=v?await hash(v):null;save();toast(v?'PIN을 설정했어요':'PIN 잠금을 해제했어요')};
 $('sExport').onclick=()=>{const b=new Blob([JSON.stringify(load(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='ow-inbox-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
 $('sImport').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.items)throw 0;DB=Object.assign(blank(),d);save();render();toast('불러왔어요')}catch(x){toast('백업 파일이 아니에요')}})};
