@@ -645,7 +645,7 @@ function aiView(){
   const c=aiCfg(), chat=DB.chat||[];
   const sugg=all().length?['오늘 들어온 문의 요약해줘','답장 안 한 문의 우선순위대로 정리해줘','신규 문의 전부에게 첫 응대 메시지 보내줘','계약 가능성 높은 고객 별표 해줘']:['병원 홈페이지 제안서 문구 써줘','크몽 서비스 소개글 써줘','처음 문의에 보낼 답변 템플릿 만들어줘'];
   return `<div class="aiw"><div class="aih"><div class="orb"></div><div><h2>AI 비서</h2><p>받은 메시지를 읽고 요약 · 답장 · 상태 정리 · 메시지 발송까지. 보내는 메시지는 항상 승인 후 발송됩니다.</p></div>
-    <div style="margin-left:auto;display:flex;gap:6px"><button class="btn" id="aiClear">대화 지우기</button></div></div>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">${c.key?`<span class="tag" style="background:rgba(62,207,142,.14);color:var(--green);padding:5px 10px">● Gemini 연결됨 · ${esc((c.model||'gemini-flash-latest').replace('gemini-','').replace('-latest',''))}</span>`:`<button class="btn" id="aiSetKey" style="color:var(--amber)">● Gemini 키 연결하기</button>`}<button class="btn" id="aiClear">대화 지우기</button></div></div>
     <div class="aim" id="aim">${!c.key?`<div class="msg a">AI 키가 아직 없어요. <b>설정 > AI 연결</b>에서 Gemini API 키를 넣으면 바로 쓸 수 있어요.</div>`:''}
       ${chat.length?chat.map(renderMsg).join(''):`<div class="msg a">${all().length?`받은 메시지 ${all().filter(i=>!i.archived).length}건을 기준으로 도와드릴게요.`:'아직 실제로 받은 메시지가 없어요. 메시지가 들어오면 요약·답장·발송을 도와드리고, 지금은 글쓰기·템플릿 만들기 등을 할 수 있어요.'}
 · "OO님한테 견적 안내 보내줘"
@@ -669,6 +669,7 @@ function bindAI(){
   inp.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();askAI()}};
   $('aiGo').onclick=askAI;
   $('aiClear').onclick=()=>{DB.chat=[];save();renderDetail()};
+  if($('aiSetKey'))$('aiSetKey').onclick=()=>$('btnSet').click();
   document.querySelectorAll('.sug button').forEach(b=>b.onclick=()=>{inp.value=b.textContent;askAI()});
   aim.querySelectorAll('.act[data-o]').forEach(el=>{const id=el.dataset.o;
     const ok=el.querySelector('[data-ok]'),ca=el.querySelector('[data-cancel]'),op=el.querySelector('[data-open]');
