@@ -343,7 +343,7 @@ const BIZ=`[사업자 정보] Owen Web(오웬웹) · 병원/소상공인 홈페�
 /* ================= store ================= */
 let DB = load();
 function blank(){return {items:{}, tpl:DEFAULT_TPL.slice(), meta:{}, pin:null, outbox:[], chat:[]}}
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.items)return Object.assign(blank(),d)}catch(e){}return blank()}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.items){let purged=false;for(const k of Object.keys(d.items)){if(d.items[k].source==='sample'||k.includes(':sample-')){delete d.items[k];purged=true}}if(purged){d.outbox=(d.outbox||[]).filter(o=>d.items[o.key]);localStorage.setItem(KEY,JSON.stringify(d))}return Object.assign(blank(),d)}}catch(e){}return blank()}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB))}
 const uid=()=>Math.random().toString(36).slice(2,10);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
