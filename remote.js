@@ -122,9 +122,13 @@ const adIn = $('adId'); adIn.value = localStorage.getItem('owRemote.anydesk') ||
 adIn.addEventListener('input', () => { adIn.value = adIn.value.replace(/[^0-9@a-zA-Z._-]/g, ''); localStorage.setItem('owRemote.anydesk', adIn.value); });
 function openAnyDesk() {
   const id = adIn.value.trim(); if (!id) { msg('AnyDesk 주소를 넣어주세요', true); adIn.focus(); return; }
-  msg('PC의 AnyDesk를 여는 중... 브라우저가 "AnyDesk 열기"를 물으면 "항상 허용" 체크 후 열기를 눌러주세요.');
+  msg('PC의 AnyDesk로 내 폰에 연결하는 중... (크롬이 "AnyDesk 열기"를 물으면 "항상 허용" 체크 후 열기)');
+  let left = false; const onBlur = () => { left = true; };
+  window.addEventListener('blur', onBlur, { once: true });
+  document.addEventListener('visibilitychange', onBlur, { once: true });
   location.href = 'anydesk:' + id;
-  setTimeout(() => { if (document.hasFocus()) msg('AnyDesk가 안 열리면 PC에 AnyDesk가 설치돼 있는지 확인해 주세요.\n(anydesk.com에서 받은 프로그램을 한 번 실행해두면 돼요)', false); }, 2500);
+  setTimeout(() => { setSt('AnyDesk 창에서 연결됨'); msg('AnyDesk 창에서 내 폰이 열렸어요. 창이 안 보이면 작업표시줄의 AnyDesk를 눌러주세요.'); }, 1500);
+  setTimeout(() => { if (!left) msg('AnyDesk 창이 안 떴다면: PC에 AnyDesk가 설치돼 있는지, 크롬의 "AnyDesk 열기" 허용을 눌렀는지 확인해 주세요.', false); }, 6000);
 }
 $('adGo').onclick = openAnyDesk;
 $('rpConn').onclick = () => S ? disconnect() : (root.classList.add('open'), openAnyDesk());
